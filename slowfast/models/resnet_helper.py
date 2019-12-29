@@ -63,9 +63,9 @@ class BasicTransform(nn.Module):
         self._inplace_relu = inplace_relu
         self._eps = eps
         self._bn_mmt = bn_mmt
-        self._construct(dim_in, dim_out, stride)
+        self.construct(dim_in, dim_out, stride)
 
-    def _construct(self, dim_in, dim_out, stride):
+    def construct(self, dim_in, dim_out, stride):
         # Tx3x3, BN, ReLU.
         self.a = nn.Conv3d(
             dim_in,
@@ -147,9 +147,9 @@ class BottleneckTransform(nn.Module):
         self._eps = eps
         self._bn_mmt = bn_mmt
         self._stride_1x1 = stride_1x1
-        self._construct(dim_in, dim_out, stride, dim_inner, num_groups)
+        self.construct(dim_in, dim_out, stride, dim_inner, num_groups)
 
-    def _construct(self, dim_in, dim_out, stride, dim_inner, num_groups):
+    def construct(self, dim_in, dim_out, stride, dim_inner, num_groups):
         (str1x1, str3x3) = (stride, 1) if self._stride_1x1 else (1, stride)
 
         # Tx1x1, BN, ReLU.
@@ -261,7 +261,7 @@ class ResBlock(nn.Module):
         self._inplace_relu = inplace_relu
         self._eps = eps
         self._bn_mmt = bn_mmt
-        self._construct(
+        self.construct(
             dim_in,
             dim_out,
             temp_kernel_size,
@@ -273,7 +273,7 @@ class ResBlock(nn.Module):
             inplace_relu,
         )
 
-    def _construct(
+    def construct(
         self,
         dim_in,
         dim_out,
@@ -419,7 +419,7 @@ class ResStage(nn.Module):
             == 1
         )
         self.num_pathways = len(self.num_blocks)
-        self._construct(
+        self.construct(
             dim_in,
             dim_out,
             stride,
@@ -432,7 +432,7 @@ class ResStage(nn.Module):
             instantiation,
         )
 
-    def _construct(
+    def construct(
         self,
         dim_in,
         dim_out,

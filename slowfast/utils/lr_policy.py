@@ -5,6 +5,26 @@
 
 import math
 
+def get_steps_relative_lr_at_iterations(cfg, gs):
+    """
+    Retrieve the learning rate of the current epoch with the option to perform
+    warm up in the beginning of the training stage.
+    Args:
+        cfg (CfgNode): configs. Details can be found in
+            slowfast/config/defaults.py
+        cur_epoch (float): the number of epoch of the current training stage.
+    """
+    def get_index(cfg, cur_it):
+        steps = cfg.SOLVER.STEPS + [cfg.SOLVER.MAX_ITERATION]
+        for ind, step in enumerate(steps): 
+            if cur_it < step:
+                assert ind >= 1, "Learing rate steps must start with 0 !"
+                rate = (cur_it - steps[ind-1]) / (steps[ind] - steps[ind-1]) if ind < len(steps) else 0.
+                return ind - 1, rate
+    ind, rate = get_index(cfg, gs)
+    return cfg.SOLVER.LRS[ind] * cfg.SOLVER.BASE_LR, rate, len(cfg.SOLVER.STEPS) - ind
+
+
 
 def get_lr_at_epoch(cfg, cur_epoch):
     """

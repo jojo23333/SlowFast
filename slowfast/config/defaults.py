@@ -153,7 +153,7 @@ _C.MODEL.NUM_CLASSES = 400
 _C.MODEL.LOSS_FUNC = "cross_entropy"
 
 # Model architectures that has one single pathway.
-_C.MODEL.SINGLE_PATHWAY_ARCH = ["c2d", "i3d", "slowonly"]
+_C.MODEL.SINGLE_PATHWAY_ARCH = ["c2d", "i3d", "slowonly", "i3d_multigrid"]
 
 # Model architectures that has multiple pathways.
 _C.MODEL.MULTI_PATHWAY_ARCH = ["slowfast"]
@@ -250,6 +250,9 @@ _C.SOLVER.LRS = []
 
 # Maximal number of epochs.
 _C.SOLVER.MAX_EPOCH = 300
+
+# Maximal number of iterations.
+_C.SOLVER.MAX_ITERATION = 3000000
 
 # Momentum.
 _C.SOLVER.MOMENTUM = 0.9

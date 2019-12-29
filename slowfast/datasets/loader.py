@@ -7,10 +7,12 @@ import torch
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data.sampler import RandomSampler
 
-from slowfast.datasets.kinetics import Kinetics
+from slowfast.datasets.kinetics import Kinetics, MultiScaleKinetics
 
 # Supported datasets.
-_DATASET_CATALOG = {"kinetics": Kinetics}
+_DATASET_CATALOG = {"kinetics": Kinetics, 
+                    "MultiScaleKinetics": MultiScaleKinetics
+                   }
 
 
 def construct_loader(cfg, split):

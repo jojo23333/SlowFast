@@ -6,6 +6,8 @@ import random
 from io import BytesIO
 import torch
 import torch.utils.data
+import torch.nn.functional as F
+import math
 
 import slowfast.datasets.decoder as decoder
 import slowfast.datasets.transform as transform
@@ -298,3 +300,47 @@ class Kinetics(torch.utils.data.Dataset):
             )
             frames = transform.uniform_crop(frames, crop_size, spatial_idx)
         return frames
+
+
+
+class MultiScaleKinetics(Kinetics):
+    """
+    A wrapper that wrap kinetics using multiscale strategy
+    """
+    def __init__(self, cfg, mode, num_retries=10):
+        super(MultiScaleKinetics, self).__init__(cfg, mode, num_retries)
+    
+    def pack_pathway_output(self, frames):
+        sqrt2 = math.sqrt(2)
+
+        frames_sp_down_0 = frames
+        frames_sp_down_1 = F.interpolate(frames, scale_factor=[sqrt2/2, sqrt2/2], align_corners=True, mode="bilinear")
+        frames_sp_down_2 = F.interpolate(frames, scale_factor=[1/2, 1/2], align_corners=True, mode="bilinear")
+        frames_sp_down_3 = F.interpolate(frames, scale_factor=[sqrt2/4, sqrt2/4], align_corners=True, mode="bilinear")
+        long_cycle_s0 = [frames_sp_down_1[:,::4,:,:], frames_sp_down_2[:,::4,:,:], frames_sp_down_3[:,::4,:,:]]
+        long_cycle_s1 = [frames_sp_down_1[:,::2,:,:], frames_sp_down_2[:,::2,:,:], frames_sp_down_3[:,::2,:,:]]
+        long_cycle_s2 = [frames_sp_down_0[:,::2,:,:], frames_sp_down_1[:,::2,:,:], frames_sp_down_2[:,::2,:,:]]
+        long_cycle_s3 = [frames_sp_down_0, frames_sp_down_1, frames_sp_down_2]
+
+        multigrid_frames = [long_cycle_s0, long_cycle_s1, long_cycle_s2, long_cycle_s3]
+
+        if self.cfg.MODEL.ARCH in self.cfg.MODEL.SINGLE_PATHWAY_ARCH:
+            frame_list = multigrid_frames
+        elif self.cfg.MODEL.ARCH in self.cfg.MODEL.MULTI_PATHWAY_ARCH:
+            raise NotImplementedError(
+                "Multigrid streategy for multipath not implemented!"
+            )
+            # fast_pathway = frames
+            # # Perform temporal sampling from the fast pathway.
+            # slow_pathway = frames[::self.cfg.SLOWFAST.ALPHA]
+
+            # frame_list = [slow_pathway, fast_pathway]
+        else:
+            raise NotImplementedError(
+                "Model arch {} is not in {}".format(
+                    self.cfg.MODEL.ARCH,
+                    self.cfg.MODEL.SINGLE_PATHWAY_ARCH
+                    + self.cfg.MODEL.MULTI_PATHWAY_ARCH,
+                )
+            )
+        return frame_list

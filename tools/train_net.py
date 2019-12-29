@@ -19,10 +19,12 @@ from slowfast.datasets import loader
 from slowfast.models import model_builder
 from slowfast.utils.meters import TrainMeter, ValMeter
 
+from slowfast.datasets.multigrid_wrapper import LongShortCycleWrapper as MultiGridWrapper
+
 logger = logging.get_logger(__name__)
 
 
-def train_epoch(train_loader, model, optimizer, train_meter, cur_epoch, cfg):
+def train_epoch(train_loader, model, optimizer, train_meter, cur_epoch, cur_gs, cfg):
     """
     Perform the video training for one epoch.
     Args:
@@ -39,8 +41,15 @@ def train_epoch(train_loader, model, optimizer, train_meter, cur_epoch, cfg):
     model.train()
     train_meter.iter_tic()
     data_size = len(train_loader)
+    wrapper = MultiGridWrapper(train_loader)
+    gs = cur_gs
+ 
+    # Update the learning rate.
+    lr, rate_cur_lr_steps, remaining_lr_steps = optim.get_gs_lr(gs, cfg)
+    wrapper.set_multgrid(gs, rate_cur_lr_steps, remaining_lr_steps)
 
-    for cur_iter, (inputs, labels, _) in enumerate(train_loader):
+    for cur_iter, (scale_b, inputs, labels, _) in enumerate(wrapper):
+        gs = gs + 1
         # Transfer the data to the current GPU device.
         if isinstance(inputs, (list,)):
             for i in range(len(inputs)):
@@ -49,8 +58,9 @@ def train_epoch(train_loader, model, optimizer, train_meter, cur_epoch, cfg):
             inputs = inputs.cuda(non_blocking=True)
 
         labels = labels.cuda()
-        # Update the learning rate.
-        lr = optim.get_epoch_lr(cur_epoch + float(cur_iter) / data_size, cfg)
+
+        # rescale learning rate according to batch_size's increase
+        lr = lr * scale_b
         optim.set_lr(optimizer, lr)
 
         # Perform the forward pass.
@@ -91,9 +101,15 @@ def train_epoch(train_loader, model, optimizer, train_meter, cur_epoch, cfg):
         train_meter.log_iter_stats(cur_epoch, cur_iter)
         train_meter.iter_tic()
 
+        # Update global step, lr, and multigrid stages
+        gs = gs + 1
+        lr, remaining_lr_steps, rate_cur_lr_steps= optim.get_gs_lr(gs, cfg)
+        wrapper.set_multgrid(gs, remaining_lr_steps, rate_cur_lr_steps)
+
     # Log epoch stats.
     train_meter.log_epoch_stats(cur_epoch)
     train_meter.reset()
+    return gs
 
 
 @torch.no_grad()
@@ -162,8 +178,11 @@ def calculate_and_update_precise_bn(loader, model, num_iters=200):
     def _gen_loader():
         for inputs, _, _ in loader:
             if isinstance(inputs, (list,)):
-                for i in range(len(inputs)):
-                    inputs[i] = inputs[i].cuda(non_blocking=True)
+                if isinstance(inputs[0], (list,)):
+                    inputs = inputs[3][0]
+                else:
+                    for i in range(len(inputs)):
+                        inputs[i] = inputs[i].cuda(non_blocking=True)
             else:
                 inputs = inputs.cuda(non_blocking=True)
             yield inputs
@@ -198,17 +217,20 @@ def train(cfg):
     # Construct the optimizer.
     optimizer = optim.construct_optimizer(model, cfg)
 
+    # Record global step
+    gs = 0
+
     # Load a checkpoint to resume training if applicable.
     if cfg.TRAIN.AUTO_RESUME and cu.has_checkpoint(cfg.OUTPUT_DIR):
         logger.info("Load from last checkpoint.")
-        last_checkpoint = cu.get_last_checkpoint(cfg.OUTPUT_DIR)
+        gs, last_checkpoint = cu.get_last_checkpoint(cfg.OUTPUT_DIR)
         checkpoint_epoch = cu.load_checkpoint(
             last_checkpoint, model, cfg.NUM_GPUS > 1, optimizer
         )
         start_epoch = checkpoint_epoch + 1
     elif cfg.TRAIN.CHECKPOINT_FILE_PATH != "":
         logger.info("Load from given checkpoint file.")
-        checkpoint_epoch = cu.load_checkpoint(
+        gs, checkpoint_epoch = cu.load_checkpoint(
             cfg.TRAIN.CHECKPOINT_FILE_PATH,
             model,
             cfg.NUM_GPUS > 1,
@@ -218,6 +240,7 @@ def train(cfg):
         )
         start_epoch = checkpoint_epoch + 1
     else:
+        gs = 0
         start_epoch = 0
 
     # Create the video train and val loaders.
@@ -235,7 +258,7 @@ def train(cfg):
         # Shuffle the dataset.
         loader.shuffle_dataset(train_loader, cur_epoch)
         # Train for one epoch.
-        train_epoch(train_loader, model, optimizer, train_meter, cur_epoch, cfg)
+        gs = train_epoch(train_loader, model, optimizer, train_meter, cur_epoch, gs, cfg)
 
         # Compute precise BN stats.
         if cfg.BN.USE_PRECISE_STATS and len(get_bn_modules(model)) > 0:

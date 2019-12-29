@@ -11,8 +11,8 @@ import slowfast.utils.checkpoint as cu
 import slowfast.utils.multiprocessing as mpu
 from slowfast.config.defaults import get_cfg
 
-from test_net import test
-from train_net import train
+from tools.test_net import test
+from tools.train_net import train
 
 
 def parse_args():

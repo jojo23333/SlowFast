@@ -13,6 +13,7 @@ _MODEL_TYPES = {
     "slowonly": ResNetModel,
     "c2d": ResNetModel,
     "i3d": ResNetModel,
+    "i3d_multigrid": ResNetModel,
 }
 
 

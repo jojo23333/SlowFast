@@ -79,6 +79,16 @@ def get_epoch_lr(cur_epoch, cfg):
     """
     return lr_policy.get_lr_at_epoch(cfg, cur_epoch)
 
+def get_gs_lr(cur_gs, cfg):
+    """
+    Retrieves the lr for the given global steps (as specified by the lr policy).
+    Args:
+        cfg (config): configs of hyper-parameters of ADAM, includes base
+        learning rate, betas, and weight decays.
+        cur_it (float): the number of epoch of the current training stage.
+    """
+    return lr_policy.get_steps_relative_lr_at_iterations(cfg, cur_gs)
+
 
 def set_lr(optimizer, new_lr):
     """
